@@ -1,0 +1,7 @@
+pytorch
+numpy
+random
+MultiClassTsetlinMachine
+MultiClassConvolutionalTsetlinMachine2D
+os
+pickle
