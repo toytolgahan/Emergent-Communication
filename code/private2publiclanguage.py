@@ -116,7 +116,7 @@ sos_token = 1
 eos_token = 2
 criterion = nn.CrossEntropyLoss()
 cos = nn.CosineSimilarity(dim=-1)
-learning_rate = 0.000001
+learning_rate = 1e-8
 
 agents = []
 optimizers = []
@@ -138,6 +138,17 @@ for i in range(NUMBER_OF_AGENTS):
     agent_optimizer.append(decoder_optimizer)
     agent_optimizer.append(encoder_optimizer)
     optimizers.append(agent_optimizer)
+
+#LOAD PARAMETERS
+for i in range(NUMBER_OF_AGENTS):
+    param_name = 'eye' + str(i) + '_parameters.pth'
+    if os.path.exists(param_name):
+        agents[i][0].load_state_dict(torch.load(param_name))
+        param_name = 'decoder' + str(i) + '_parameters.pth'
+        agents[i][1].load_state_dict(torch.load(param_name))
+        param_name = 'encoder' + str(i) + '_parameters.pth'
+        agents[i][2].load_state_dict(torch.load(param_name))
+
 
 
 images = torch.from_numpy(cifarData[0]).float()
@@ -313,6 +324,17 @@ for n, tm in enumerate(multiTMs):
 print("train agents to learn the public language")
 for i in range(len(agents)):
     privateSocialTraining(agents[i],optimizers[i],image_data,social_text,3000)
+
+# SAVE THE PARAMETERS
+for i in range(NUMBER_OF_AGENTS):
+    param_name = 'eye' + str(i) + '_parameters.pth'
+    torch.save(agents[i][0].state_dict(), param_name)
+    param_name = 'decoder' + str(i) + '_parameters.pth'
+    torch.save(agents[i][1].state_dict(), param_name)
+    param_name = 'encoder' + str(i) + '_parameters.pth'
+    torch.save(agents[i][2].state_dict(), param_name)
+
+
 
 #TEST
 print("test if they are able to communicate with this new language")
