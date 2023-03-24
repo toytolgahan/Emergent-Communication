@@ -337,7 +337,7 @@ for i in range(NUMBER_OF_AGENTS):
 
 
 #TEST
-print("test if they are able to communicate with this new language")
+print("test if agents are able to communicate in this new language")
 
 for i in range(len(test_images)):
     accurate = 0
