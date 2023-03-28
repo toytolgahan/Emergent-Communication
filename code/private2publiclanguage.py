@@ -28,9 +28,7 @@ def load_cifar10(data_dir):
     train_images = np.vstack(train_images)
     test_images = load_batch(os.path.join(data_dir, 'test_batch'))
     return train_images, test_images
-data_dir = "cifar-10-batches-py"
 
-cifarData = load_cifar10(data_dir)
 
 #ENCODER, DECODER, EYE
 class Encoder(nn.Module):
@@ -118,46 +116,18 @@ criterion = nn.CrossEntropyLoss()
 cos = nn.CosineSimilarity(dim=-1)
 learning_rate = 1e-8
 
-agents = []
-optimizers = []
-for i in range(NUMBER_OF_AGENTS):
-    agent = []
-    agent_optimizer = []
-    eye = Eye(hidden_size)
-    encoder = Encoder(vocab_size,hidden_size)
-    decoder = Decoder(vocab_size,hidden_size)
-    agent.append(eye)
-    agent.append(decoder)
-    agent.append(encoder)
-    agents.append(agent)
-    
-    eye_optimizer = optim.SGD(eye.parameters(),lr=learning_rate)
-    encoder_optimizer = optim.SGD(encoder.parameters(),lr=learning_rate)
-    decoder_optimizer = optim.SGD(decoder.parameters(),lr=learning_rate)
-    agent_optimizer.append(eye_optimizer)
-    agent_optimizer.append(decoder_optimizer)
-    agent_optimizer.append(encoder_optimizer)
-    optimizers.append(agent_optimizer)
-
-#LOAD PARAMETERS
-for i in range(NUMBER_OF_AGENTS):
-    param_name = 'eye' + str(i) + '_parameters.pth'
-    if os.path.exists(param_name):
-        agents[i][0].load_state_dict(torch.load(param_name))
-        param_name = 'decoder' + str(i) + '_parameters.pth'
-        agents[i][1].load_state_dict(torch.load(param_name))
-        param_name = 'encoder' + str(i) + '_parameters.pth'
-        agents[i][2].load_state_dict(torch.load(param_name))
 
 
 
-images = torch.from_numpy(cifarData[0]).float()
-
-test_images = torch.from_numpy(cifarData[1]).float()
 
 
 
-def privateTraining(agent,agent_optimizer,epochs):
+
+
+
+
+
+def privateTraining(agent,agent_optimizer,epochs,images):
     eye,decoder,encoder = agent
     eye_optimizer,encoder_optimizer,decoder_optimizer = agent_optimizer
     for epoch in range(epochs):
@@ -279,10 +249,7 @@ from pyTsetlinMachine.tools import Binarizer
 import numpy as np
 
 nth_words = lambda data, n: [i[n] for i in data]
-multiTMs = []
-for i in range(MAX_LENGTH):
-    tm = MultiClassConvolutionalTsetlinMachine2D(150,60,3.9,(2,2),boost_true_positive_feedback=0)
-    multiTMs.append(tm)
+
 
 def trainTM(image_data,text_data):
     total = 0
@@ -294,88 +261,141 @@ def trainTM(image_data,text_data):
     print("accuracy: ",total/((n+1)*len(text_data)))
 
 
-#TRAINING
 
-#TRAIN AGENTS PRIVATELY
-print("Training agents privately")
-for i in range(len(agents)):
-    print("AGENT{}:".format(i))
-    privateTraining(agents[i],optimizers[i],2000)
+def main():
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#CONSTRUCT PRIVATE LANGUAGE DATA
-print("Emergence of private languages")
-image_data, text_data = get_data(agents[0],images,500)
-for i in range(1,len(agents)):
-    image_data = torch.cat((image_data, get_data(agents[i],images,500)[0]),dim=0)
-    text_data += get_data(agents[i],images,500)[1]
+    data_dir = "cifar-10-batches-py"
+
+    cifarData = load_cifar10(data_dir)
+	
+    agents = []
+    optimizers = []
+    for i in range(NUMBER_OF_AGENTS):
+        agent = []
+        agent_optimizer = []
+        eye = Eye(hidden_size)
+        encoder = Encoder(vocab_size,hidden_size)
+        decoder = Decoder(vocab_size,hidden_size)
+        agent.append(eye)
+        agent.append(decoder)
+        agent.append(encoder)
+        agents.append(agent)
     
-#TRAIN THE COMMUNITY
-print("private to rule based through Tsetlin Machine")
-trainTM(image_data,text_data)
+        eye_optimizer = optim.SGD(eye.parameters(),lr=learning_rate)
+        encoder_optimizer = optim.SGD(encoder.parameters(),lr=learning_rate)
+        decoder_optimizer = optim.SGD(decoder.parameters(),lr=learning_rate)
+        agent_optimizer.append(eye_optimizer)
+        agent_optimizer.append(decoder_optimizer)
+        agent_optimizer.append(encoder_optimizer)
+        optimizers.append(agent_optimizer)
 
-#CONSTRUCT PUBLIC LANGUAGE DATA
-print("emergence of the public language")
-social_text = torch.zeros(len(text_data),MAX_LENGTH)
-for n, tm in enumerate(multiTMs):
-    social_text[:,n] = torch.from_numpy(tm.predict(image_data).astype(float))
+	#LOAD PARAMETERS
+    for i in range(NUMBER_OF_AGENTS):
+        param_name = 'eye' + str(i) + '_parameters.pth'
+        if os.path.exists(param_name):
+            agents[i][0].load_state_dict(torch.load(param_name))
+            param_name = 'decoder' + str(i) + '_parameters.pth'
+            agents[i][1].load_state_dict(torch.load(param_name))
+            param_name = 'encoder' + str(i) + '_parameters.pth'
+            agents[i][2].load_state_dict(torch.load(param_name))
+
+
+
+    images = torch.from_numpy(cifarData[0]).float()
     
-#TRAIN WITH COMMUNITY SUPERVISION
-print("train agents to learn the public language")
-for i in range(len(agents)):
-    privateSocialTraining(agents[i],optimizers[i],image_data,social_text,3000)
 
-# SAVE THE PARAMETERS
-for i in range(NUMBER_OF_AGENTS):
-    param_name = 'eye' + str(i) + '_parameters.pth'
-    torch.save(agents[i][0].state_dict(), param_name)
-    param_name = 'decoder' + str(i) + '_parameters.pth'
-    torch.save(agents[i][1].state_dict(), param_name)
-    param_name = 'encoder' + str(i) + '_parameters.pth'
-    torch.save(agents[i][2].state_dict(), param_name)
-
-
-
-#TEST
-print("test if agents are able to communicate in this new language")
-
-for i in range(len(test_images)):
-    accurate = 0
-    a1 = random.randint(0,len(agents)-1)
-    eye1,decoder1,encoder1 = agents[a1]
+    test_images = torch.from_numpy(cifarData[1]).float()
     
-    a1_hidden = eye1(test_images[i].unsqueeze(0)).view(1,1,-1)
-    input = torch.tensor([sos_token])
-    text = torch.zeros(MAX_LENGTH).int()
-    word_length = 0
-    for di in range(MAX_LENGTH):
-        output, a1_hidden, probs = decoder1(input, a1_hidden)
-        topv, topi = probs.topk(1)
-        input = topi.detach()
-        if input.item() == eos_token:
-            break
-        text[di] = input.item()
-        word_length += 1
-    #another random agent as listener
-    a2 = random.randint(0,len(agents)-1)
-    eye2,decoder2,encoder2 = agents[a2]
-    a2_hidden = encoder2.initHidden()
-    for ei in range(word_length):
-        input = decoder2.embedding(text[ei])
-        a2_hidden = encoder2(input,a2_hidden)
-    
-    pick_image = torch.zeros(11)
-    
-    #Compare hidden state produced by text to hidden states produced by distractor images and the orignal image
-    for n in range(10):
-        random_image = test_images[random.randint(0,len(test_images)-1)]
-        eye_hidden = eye2(random_image.unsqueeze(0)).view(1,1,-1)
-        pick_image[n] = cos(a2_hidden, eye_hidden)
-    #similarity to the original image
-    eye_hidden = eye2(test_images[i].unsqueeze(0)).view(1,1,-1)
-    pick_image[10] = cos(a2_hidden, eye_hidden)
-    if torch.argmax(pick_image).item() == 10:
-        accurate += 1
-print("test accuracy is ",accurate/(len(test_images)))
+
+    multiTMs = []
+    for i in range(MAX_LENGTH):
+        tm = MultiClassConvolutionalTsetlinMachine2D(150,60,3.9,(2,2),boost_true_positive_feedback=0)
+        multiTMs.append(tm)
+    #TRAINING
+
+    #TRAIN AGENTS PRIVATELY
+    print("Training agents privately")
+    for i in range(len(agents)):
+        print("AGENT{}:".format(i))
+        privateTraining(agents[i],optimizers[i],2000,images)
 
 
+    #CONSTRUCT PRIVATE LANGUAGE DATA
+    print("Emergence of private languages")
+    image_data, text_data = get_data(agents[0],images,500)
+    for i in range(1,len(agents)):
+        image_data = torch.cat((image_data, get_data(agents[i],images,500)[0]),dim=0)
+        text_data += get_data(agents[i],images,500)[1]
+        
+    #TRAIN THE COMMUNITY
+    print("private to rule based through Tsetlin Machine")
+    trainTM(image_data,text_data)
+
+    #CONSTRUCT PUBLIC LANGUAGE DATA
+    print("emergence of the public language")
+    social_text = torch.zeros(len(text_data),MAX_LENGTH)
+    for n, tm in enumerate(multiTMs):
+        social_text[:,n] = torch.from_numpy(tm.predict(image_data).astype(float))
+        
+    #TRAIN WITH COMMUNITY SUPERVISION
+    print("train agents to learn the public language")
+    for i in range(len(agents)):
+        privateSocialTraining(agents[i],optimizers[i],image_data,social_text,3000)
+
+    # SAVE THE PARAMETERS
+    for i in range(NUMBER_OF_AGENTS):
+        param_name = 'eye' + str(i) + '_parameters.pth'
+        torch.save(agents[i][0].state_dict(), param_name)
+        param_name = 'decoder' + str(i) + '_parameters.pth'
+        torch.save(agents[i][1].state_dict(), param_name)
+        param_name = 'encoder' + str(i) + '_parameters.pth'
+        torch.save(agents[i][2].state_dict(), param_name)
+
+
+
+    #TEST
+    print("test if agents are able to communicate in this new language")
+
+    for i in range(len(test_images)):
+        accurate = 0
+        a1 = random.randint(0,len(agents)-1)
+        eye1,decoder1,encoder1 = agents[a1]
+        
+        a1_hidden = eye1(test_images[i].unsqueeze(0)).view(1,1,-1)
+        input = torch.tensor([sos_token])
+        text = torch.zeros(MAX_LENGTH).int()
+        word_length = 0
+        for di in range(MAX_LENGTH):
+            output, a1_hidden, probs = decoder1(input, a1_hidden)
+            topv, topi = probs.topk(1)
+            input = topi.detach()
+            if input.item() == eos_token:
+                break
+            text[di] = input.item()
+            word_length += 1
+        #another random agent as listener
+        a2 = random.randint(0,len(agents)-1)
+        eye2,decoder2,encoder2 = agents[a2]
+        a2_hidden = encoder2.initHidden()
+        for ei in range(word_length):
+            input = decoder2.embedding(text[ei])
+            a2_hidden = encoder2(input,a2_hidden)
+        
+        pick_image = torch.zeros(11)
+        
+        #Compare hidden state produced by text to hidden states produced by distractor images and the orignal image
+        for n in range(10):
+            random_image = test_images[random.randint(0,len(test_images)-1)]
+            eye_hidden = eye2(random_image.unsqueeze(0)).view(1,1,-1)
+            pick_image[n] = cos(a2_hidden, eye_hidden)
+        #similarity to the original image
+        eye_hidden = eye2(test_images[i].unsqueeze(0)).view(1,1,-1)
+        pick_image[10] = cos(a2_hidden, eye_hidden)
+        if torch.argmax(pick_image).item() == 10:
+            accurate += 1
+    print("test accuracy is ",accurate/(len(test_images)))
+
+if __name__ == '__main__':
+    main()
