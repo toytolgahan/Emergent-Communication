@@ -115,6 +115,7 @@ eos_token = 2
 criterion = nn.CrossEntropyLoss()
 cos = nn.CosineSimilarity(dim=-1)
 learning_rate = 1e-8
+momentum = 0.9
 
 
 
@@ -283,9 +284,9 @@ def main():
         agent.append(encoder)
         agents.append(agent)
     
-        eye_optimizer = optim.SGD(eye.parameters(),lr=learning_rate)
-        encoder_optimizer = optim.SGD(encoder.parameters(),lr=learning_rate)
-        decoder_optimizer = optim.SGD(decoder.parameters(),lr=learning_rate)
+        eye_optimizer = optim.SGD(eye.parameters(),lr=learning_rate,momentum=momentum)
+        encoder_optimizer = optim.SGD(encoder.parameters(),lr=learning_rate, momentum=momentum)
+        decoder_optimizer = optim.SGD(decoder.parameters(),lr=learning_rate, momentum=momentum)
         agent_optimizer.append(eye_optimizer)
         agent_optimizer.append(decoder_optimizer)
         agent_optimizer.append(encoder_optimizer)
